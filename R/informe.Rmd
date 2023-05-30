@@ -1,0 +1,220 @@
+---
+title: "Algoritmos machine learning"
+author: "Andres Hernandez Moncada cod: 95663 Andres  Mendoza cod: 86204 David Martinez cod: 81639 Jaime Gonzalez cod:33236 Juan Sebastian Rodriguez cod: 92699"
+date: "`r Sys.Date()`"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+**Ambientes**
+
+Diseñamos tres ambientes con techos a diferentes alturas y una pared de diferente color
+
+•	Hábitat 1 color verde.
+
+•	Hábitat 2 color azul.
+
+•	Hábitat 3 color amarillo.
+
+**Adquisición de datos**
+
+Para la adquisición de datos utilizamos los siguientes sensores ultrasonido HC-SR04, sensor de color TCS3200, para la captura de datos utilizamos un arduino uno el cual comunicamos por bluetooth al computador y realizamos la captura por medio de PLX-DAQ en excel una vez obtenidas las lecturas procedemos a realizar el postprocesado y guardamos el archivo en formato .csv.
+
+**Datos adquiridos por arduino**
+
+Datos para entrenar los modelos de machine learning con 216 observaciones.
+
+```{r message=FALSE, warning=FALSE, paged.print=TRUE,include=TRUE,echo=FALSE}
+library(tidyverse)
+library(dplyr)
+DAQEntrenamiento <- read.csv("C:/Users/USER/Desktop/machine 3corte/DAQEntrenamiento.csv", sep=";")
+head(DAQEntrenamiento)
+```
+Datos para predicción con 6 observaciones dos por ambiente, las dos primeras observaciones corresponden al hábitat 1, las dos siguientes son del hábitat 3 y las últimas dos corresponden al hábitat 2.
+```{r message=FALSE, warning=FALSE, paged.print=TRUE,include=TRUE,echo=FALSE}
+library(tidyverse)
+library(dplyr)
+DAQReal <- read.csv("C:/Users/USER/Desktop/machine 3corte/DAQReal.csv", sep=";")
+head(DAQReal)
+```
+**Modelo KNN**
+
+Código de predicción para las variables de los sensores de ultrasonido.
+
+```{r message=FALSE, warning=FALSE, paged.print=TRUE,include=TRUE}
+library(tidyverse)
+library(dplyr)
+Prediccion <- read.csv("C:/Users/USER/Desktop/machine 3corte/Prediccion.csv", sep=";")
+DAQEntrenamiento <- read.csv("C:/Users/USER/Desktop/machine 3corte/DAQEntrenamiento.csv", sep=";")
+
+X<-Prediccion$ultrasonido
+Y<-Prediccion$real
+B<-cov(X,Y)/var(X)
+A<-mean(Y)-B*mean(X)
+
+normalise <-function(x){
+  return((x-min(x))/(max(x)-min(x)))}
+
+DAQKNN=DAQEntrenamiento
+DAQKNN<-mutate(DAQKNN,regresion_ultrasonido=A+ultrasonido*B)
+
+```
+
+**Analisis de datos**
+
+Como podemos observar en las graficas de histogramas para cada variable es posible diferencias cada habitat en el histograma del sensor de ultra sonido y en el histograma del valor del sensor rgvb que corresponde al color rojo.
+```{r message=FALSE, warning=FALSE,include=TRUE,echo=TRUE}
+hist(DAQKNN$ultrasonido,breaks=50)
+hist(DAQKNN$rojo,breaks=50)
+hist(DAQKNN$azul,breaks=50)
+hist(DAQKNN$verde,breaks=50)
+library(psych)
+pairs.panels(DAQKNN[2:5], pch=21, main=("habit.at 1 =rojo, convexo=verde, plano=azul")
+             , bg=c("red","green2","blue")[unclass(DAQKNN$habitad)])
+```
+
+Proporción de dataset
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE,include=TRUE}
+muestra <-DAQKNN[1:5,]
+prop.table((table(muestra$ultrasonido)))
+prop.table((table(muestra$rojo)))
+prop.table((table(muestra$azul)))
+prop.table((table(muestra$verde)))
+```
+podemos observar las proporciones para cada variable predictora, al ser números menores a cero nos indica que los datos adquiridos son aptos para técnicas de machine learning.
+
+**ingenieria de caracteristica**
+
+Normalizamos los datos de los sensores por el metodo de z score.
+```{r message=FALSE, warning=FALSE, paged.print=FALSE,include=TRUE}
+
+normData<-DAQKNN
+standarData<-DAQKNN
+normData$ultrasonido<-normalise(normData$ultrasonido)
+
+normData$rojo<-normalise(normData$rojo)
+normData$azul<-normalise(normData$azul)
+normData$verde<-normalise(normData$verde)
+
+
+standarData$ultrasonido<-scale(normData$ultrasonido)
+standarData$rojo<-scale(normData$rojo)
+standarData$azul<-scale(normData$azul)
+standarData$verde<-scale(normData$verde)
+
+colnames(standarData)[1:5]<-c("ultrasonido[,1]","laser[,1]","rojo[,1]","azul[,1]","verde[,1]")
+
+```
+**KNN**
+
+Para entrenar el modelo de KNN utilizamos el 70% del dataset DAQEntrenamiento el cual tiene un total de 216 observaciones, para los datos de prueba utilizamos el 30% de los datos.
+
+Utilizamos la librería class para entrenar el modelo y la librería gmodels para verificar el rendimiento del modelo KNN.
+```{r message=FALSE, warning=FALSE, paged.print=FALSE,include=TRUE}
+sample.index<-sample(3:nrow(DAQKNN)
+                     , nrow(DAQKNN)*0.7
+                     , replace=FALSE)
+k<-3
+
+predictors<-c("ultrasonido","rojo",
+              "azul","verde")
+train.data<-DAQKNN[sample.index
+                 ,c(predictors,"habitat")
+                 , drop=F]
+test.data<-DAQKNN[-sample.index
+                ,c(predictors,"habitat")
+                , drop=F]
+library(class)
+predictors<- knn(train=train.data[predictors]
+                  ,test=test.data[predictors]
+                  ,cl=train.data$habitat
+                  ,k=k)
+```
+**Verificación del rendimiento**
+
+La verificación la realizamos con 65 datos y obtenemos un bajo porcentaje de error.
+```{r message=FALSE, warning=FALSE, paged.print=FALSE,include=TRUE}
+ 
+library(gmodels)
+CrossTable(x=test.data$habitat,y=predictors)
+
+```
+**regresión logística**
+Para el modelo de regresión logística utilizamos la librería (caret), cargamos los datos de entrenamiento y los datos reales para predecir.
+
+Aplicamos cross validation de 5 divisiones y 10 repeticiones para mejorar el desempeño. 
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE,include=TRUE}
+library(caret)
+DAQEntrenamiento <- read.csv("C:/Users/USER/Desktop/machine 3corte/DAQEntrenamiento.csv", sep=";")
+DAQReal <- read.csv("C:/Users/USER/Desktop/machine 3corte/DAQReal.csv", sep=";")
+fit.control <- trainControl(method = "repeatedcv"
+                            , number = 5, repeats = 10)
+```
+entrenamos el modelo fit estableciendo la variable habitat como clasificatoria y las variables de los sensores como predictores, el método del modelo es multinom debido a que tenemos 3 ambientes para clasificar, al parámetro trControl le cargamos el modelo de cross validation previamente configurado.
+```{r message=FALSE, warning=FALSE, paged.print=FALSE,include=TRUE}
+fit <- train(habitat ~ ultrasonido + rojo + azul+verde,data = DAQEntrenamiento
+             , method = "multinom"
+             , trControl = fit.control
+             , trace = FALSE)
+```
+
+El modelo utiliza el mayor valor de exactitud en este caso es decay = 0.1.
+```{r message=FALSE, warning=FALSE, paged.print=FALSE,include=TRUE}
+fit
+```
+**Predicción con datos fuera del entrenamiento**
+
+Al revisar los porcentajes de predicción nos podemos dar cuenta que nos genera un error en una predicción ya que en la segunda predicción el algoritmo predijo que se encontraba en el hábitat 3 con el 66% de certeza, pero se equivocó ya que los datos de la segunda predicción corresponden al habitat 1. las demás predicciones si son correctas.
+```{r message=FALSE, warning=FALSE, paged.print=FALSE,include=TRUE}
+predict(fit, DAQReal, type="prob")
+```
+**decision tree**
+Utilizamos la librería (rpart) para entrenar el modelo de predicción decision tree incluimos los dataset de entrenamiento y el real para la predicción.
+```{r message=FALSE, warning=FALSE, paged.print=FALSE,include=TRUE}
+library(rpart)
+DAQEntrenamiento <- read.csv("C:/Users/USER/Desktop/machine 3corte/DAQEntrenamiento.csv", sep=";")
+DAQReal <- read.csv("C:/Users/USER/Desktop/machine 3corte/DAQReal.csv", sep=";")
+```
+entrenamos el modelo con la variable habitat como clase y las variables de los sensores como predictoras, utilizamos el método class para entrenar el modelo como clasificación y le decimos que data es igual a los datos de entrenamiento.
+```{r message=FALSE, warning=FALSE, paged.print=FALSE,include=TRUE}
+library(rpart)
+fit <-
+  rpart(habitat ~ ultrasonido + rojo + azul+verde,
+        method = "class", 
+        data= DAQEntrenamiento)
+
+
+```
+Para los datos de entrenamiento en el modelo de árbol de predicción podemos observar que tenemos un margen de error del 5% al predecir el hábitat 1, para predecir los habita 2 y 3 tenemos un 100% de predicción.
+```{r message=FALSE, warning=FALSE, paged.print=FALSE,include=TRUE}
+rpart.plot::rpart.plot(fit, shadow.col = "gray")
+```
+Podamos el árbol con el mínimo error para hacer que sea más eficiente el proceso de predicción.
+```{r message=FALSE, warning=FALSE, paged.print=FALSE,include=TRUE}
+fit.pruned <-
+  prune(fit, cp=fit$cptable[which.min(fit$cptable[,
+                                                  "xerror"]),"CP"])
+
+par(mfrow= c(1, 2))
+```
+Al comparar el árbol original con el árbol podado nos damos cuenta que el original ya se encuentra reducido al máximo para el dataset de entrenamiento.
+```{r message=FALSE, warning=FALSE, paged.print=FALSE,include=TRUE}
+
+rpart.plot::rpart.plot(fit,main= "Original Tree")
+rpart.plot::rpart.plot(fit.pruned,main= "Pruned Tree")
+```
+**Predicción con datos fuera del entrenamiento**
+
+Como podemos observar tenemos un error con la segunda predicción ya que esta es del hábitat 1 no del hábitat 2 las demás predicciones si son correctas ya que el robot capturo dos datos por cada hábitat en el siguiente orden hábitat 1, hábitat 3 y hábitat 2.
+```{r message=FALSE, warning=FALSE, paged.print=FALSE,include=TRUE}
+
+predict(fit, DAQReal, type="prob")
+
+
+```
+
+

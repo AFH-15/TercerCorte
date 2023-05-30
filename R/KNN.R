@@ -3,26 +3,6 @@ library(dplyr)
 Prediccion <- read.csv("C:/Users/USER/Desktop/machine 3corte/Prediccion.csv", sep=";")
 DAQEntrenamiento <- read.csv("C:/Users/USER/Desktop/machine 3corte/DAQEntrenamiento.csv", sep=";")
 
-##prediccion ultrasonido minimos cuadrados
-X<-Prediccion$ultrasonido
-Y<-Prediccion$real
-B<-cov(X,Y)/var(X)
-A<-mean(Y)-B*mean(X)
-##------------------------------------------------------
-##prediccion laser minimos cuadrados
-##x<-DAQEntrenamiento$laser
-##y<-DAQEntrenamiento$real
-##b<-cov(x,y)/var(x)
-##a<-mean(y)-b*mean(x)
-##KNN_______________________________________________
-normalise <-function(x){##
-  return((x-min(x))/(max(x)-min(x)))}
-
-DAQKNN=DAQEntrenamiento
-DAQKNN<-mutate(DAQKNN,regresion_ultrasonido=A+ultrasonido*B)
-##DAQKNN<-mutate(DAQKNN,regresion_laser=a+laser*b)
-
-##convertir numero a factor si no es char
 plot(DAQKNN[2])
 plot(DAQKNN[3:6])
 hist(DAQKNN$ultrasonido,breaks=15)
@@ -40,14 +20,6 @@ prop.table((table(DAQKNN$rojo)))
 prop.table((table(DAQKNN$azul)))
 prop.table((table(DAQKNN$verde)))##virificar si el dataset es util si el numero es pequeño esta balanceado
 
-##ingenieria de caracteristicas
-normData<-DAQKNN
-standarData<-DAQKNN
-normData$ultrasonido<-normalise(normData$ultrasonido)
-
-normData$rojo<-normalise(normData$rojo)
-normData$azul<-normalise(normData$azul)
-normData$verde<-normalise(normData$verde)
 
 ##normalizacion z score
 standarData$ultrasonido<-scale(normData$ultrasonido)
@@ -61,7 +33,7 @@ sample.index<-sample(3:nrow(DAQKNN)
                      , replace=FALSE)
 ##------------------------------------------
 ## entrenamiento
-k<-3
+k<-5
 
 predictors<-c("ultrasonido","rojo",
               "azul","verde")
@@ -80,11 +52,4 @@ predictors<- knn(train=train.data[predictors]## entrenamiento variables 70% trai
 ## verificar el rendimiento
 library(gmodels)
 CrossTable(x=test.data$habitat,y=predictors)
-library(caret)
 
-##DAQReal$ultrasonido<-as.factor(DAQReal$ultrasonido)
-DAQReal$rojo<-as.factor(DAQReal$rojo)
-DAQReal$verde<-as.factor(DAQReal$verde)
-DAQReal$azul<-as.factor(DAQReal$azul)
-DAQReal <- read.csv("C:/Users/USER/Desktop/machine 3corte/DAQReal.csv", sep=";")
-predict(predictors, DAQReal)
